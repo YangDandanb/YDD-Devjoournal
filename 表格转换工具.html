@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表格转换工具</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #4A90D9;
+  --primary-light: #6BA5E7;
+  --primary-dark: #3570B0;
+  --bg: #F0F6FC;
+  --card-bg: #FFFFFF;
+  --text: #2C3E50;
+  --text-secondary: #6B7D8E;
+  --border: #D6E4F0;
+  --success: #52C41A;
+  --error: #E74C3C;
+  --warning: #F39C12;
+  --shadow: 0 2px 12px rgba(74, 144, 217, 0.12);
+  --radius: 10px;
+  --transition: 0.2s ease;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ====== Header ====== */
+.header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  text-align: center;
+  padding: 22px 20px 18px;
+}
+.header h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: 0.5px; }
+.header p { font-size: 0.9rem; opacity: 0.85; margin-top: 4px; }
+
+/* ====== Main Layout ====== */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.card {
+  flex: 1 1 400px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-title .icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+}
+.card-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: -8px;
+}
+
+/* ====== Drop Zone ====== */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--primary);
+  background: rgba(74, 144, 217, 0.04);
+}
+.drop-zone-icon { font-size: 2.2rem; margin-bottom: 8px; }
+.drop-zone-text { font-size: 0.9rem; color: var(--text-secondary); }
+.drop-zone-hint { font-size: 0.78rem; color: #A0B4C4; margin-top: 4px; }
+.drop-zone input[type="file"] { display: none; }
+
+/* ====== File Info ====== */
+.file-info {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: #F7FAFD;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+.file-info .name { font-weight: 500; word-break: break-all; flex: 1; }
+.file-info .clear {
+  background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; font-size: 1.1rem; line-height: 1;
+  padding: 2px 6px; border-radius: 4px;
+}
+.file-info .clear:hover { color: var(--error); background: #FDECEA; }
+
+/* ====== Format Options ====== */
+.format-options {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.format-btn {
+  flex: 1; min-width: 90px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition);
+  text-align: center;
+}
+.format-btn:hover { border-color: var(--primary-light); background: #F5F9FD; }
+.format-btn.active {
+  border-color: var(--primary);
+  background: rgba(74, 144, 217, 0.08);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+/* ====== Detection Results ====== */
+.detection-box {
+  background: #F7FAFD;
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 0.85rem;
+}
+.detection-box .row {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 6px;
+}
+.detection-box .row:last-child { margin-bottom: 0; }
+.detection-box .label { color: var(--text-secondary); font-weight: 500; }
+.detection-box .value { font-weight: 500; }
+.detection-box .type-badge {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 0.78rem; font-weight: 600;
+}
+.type-badge.number { background: #E8F5E9; color: #2E7D32; }
+.type-badge.date   { background: #FFF3E0; color: #E65100; }
+.type-badge.text   { background: #ECEFF1; color: #546E7A; }
+
+/* ====== Convert Button ====== */
+.convert-btn {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+  letter-spacing: 0.5px;
+}
+.convert-btn:hover:not(:disabled) { background: var(--primary-dark); }
+.convert-btn:active:not(:disabled) { transform: scale(0.98); }
+.convert-btn:disabled {
+  background: #C5D5E6;
+  cursor: not-allowed;
+}
+
+/* ====== Toast ====== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+.toast {
+  padding: 12px 18px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+  word-break: break-word;
+}
+.toast.info    { background: var(--primary); }
+.toast.success { background: var(--success); }
+.toast.error   { background: var(--error); }
+.toast.warning { background: var(--warning); }
+
+@keyframes toastIn  { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes toastOut { from { opacity: 1; transform: translateX(0);    } to { opacity: 0; transform: translateX(40px); } }
+
+/* ====== Responsive ====== */
+@media (max-width: 860px) {
+  .main { flex-direction: column; padding: 16px 12px; }
+  .card { flex: 1 1 auto; }
+  .header h1 { font-size: 1.3rem; }
+}
+
+/* ====== Loading Spinner ====== */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>表格转换工具</h1>
+  <p>所有处理都在本地浏览器完成，数据不会上传</p>
+</div>
+
+<div class="main">
+  <!-- ====== Card 1: 表格 → 纯文本 ====== -->
+  <div class="card" id="card-tab2text">
+    <div class="card-title">
+      <span class="icon">📄</span> 表格 → 纯文本
+    </div>
+    <p class="card-desc">将 Excel (.xlsx/.xls) 或 CSV 文件转换为纯文本格式</p>
+
+    <div class="drop-zone" id="drop-tab2text">
+      <div class="drop-zone-icon">📁</div>
+      <div class="drop-zone-text">拖拽文件到此处，或点击选择文件</div>
+      <div class="drop-zone-hint">支持 .xlsx / .xls / .csv</div>
+      <input type="file" id="file-input-tab2text" accept=".xlsx,.xls,.csv">
+    </div>
+
+    <div class="file-info" id="file-info-tab2text" style="display:none">
+      <span>📋</span>
+      <span class="name" id="file-name-tab2text"></span>
+      <button class="clear" id="clear-tab2text" title="清除文件">✕</button>
+    </div>
+
+    <div class="format-options" id="format-options">
+      <button class="format-btn active" data-format="csv">CSV</button>
+      <button class="format-btn" data-format="markdown">Markdown 表格</button>
+      <button class="format-btn" data-format="fixedwidth">固定宽度文本</button>
+    </div>
+
+    <button class="convert-btn" id="convert-tab2text" disabled>选择文件后开始转换</button>
+  </div>
+
+  <!-- ====== Card 2: 纯文本 → Excel ====== -->
+  <div class="card" id="card-text2tab">
+    <div class="card-title">
+      <span class="icon">📊</span> 纯文本 → Excel
+    </div>
+    <p class="card-desc">将纯文本表格转换为 Excel 文件，自动识别格式和数据类型</p>
+
+    <div class="drop-zone" id="drop-text2tab">
+      <div class="drop-zone-icon">📁</div>
+      <div class="drop-zone-text">拖拽文件到此处，或点击选择文件</div>
+      <div class="drop-zone-hint">支持 .txt / .csv / .md / .tsv</div>
+      <input type="file" id="file-input-text2tab" accept=".txt,.csv,.md,.tsv,.tab">
+    </div>
+
+    <div class="file-info" id="file-info-text2tab" style="display:none">
+      <span>📋</span>
+      <span class="name" id="file-name-text2tab"></span>
+      <button class="clear" id="clear-text2tab" title="清除文件">✕</button>
+    </div>
+
+    <div class="detection-box" id="detection-box" style="display:none">
+      <div class="row">
+        <span class="label">检测格式：</span>
+        <span class="value" id="detected-format">-</span>
+      </div>
+      <div class="row" id="col-types-row" style="display:none">
+        <span class="label">列数据类型：</span>
+        <span id="col-types-display"></span>
+      </div>
+    </div>
+
+    <button class="convert-btn" id="convert-text2tab" disabled>选择文件后开始转换</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ===================================================================
+// TableConverter — 表格转换工具（全部代码）
+// ===================================================================
+(function () {
+'use strict';
+
+// ========================= Utils =========================
+const Utils = {
+  qs(sel, root) { return (root || document).querySelector(sel); },
+  qsa(sel, root) { return (root || document).querySelectorAll(sel); },
+  on(el, evt, fn) { el.addEventListener(evt, fn); },
+
+  showToast(msg, type) {
+    type = type || 'info';
+    const container = Utils.qs('#toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 3000);
+  },
+
+  // 获取文件名基本部分（去扩展名）
+  getBaseName(filename) {
+    // 处理如 data.tar.gz → data.tar
+    // 常见多段扩展名仅处理 .tar.gz
+    const knownMulti = ['.tar.gz', '.tar.bz2', '.tar.xz'];
+    for (let i = 0; i < knownMulti.length; i++) {
+      if (filename.toLowerCase().endsWith(knownMulti[i])) {
+        return filename.slice(0, -knownMulti[i].length);
+      }
+    }
+    const dot = filename.lastIndexOf('.');
+    return dot > 0 ? filename.slice(0, dot) : filename;
+  },
+
+  // 触发浏览器下载
+  triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+};
+
+// ========================= FileIO =========================
+const FileIO = {
+  readAsArrayBuffer(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error('文件读取失败')); };
+      reader.readAsArrayBuffer(file);
+    });
+  },
+
+  readAsText(file) {
+    const self = this;
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const buffer = reader.result;
+        // 先尝试 UTF-8
+        let text = self._tryDecode(buffer, 'utf-8');
+        // 如果看起来有乱码（较多替换字符），尝试 GBK
+        if (text && self._looksGarbled(text)) {
+          const gbkText = self._tryDecode(buffer, 'gbk');
+          if (gbkText && !self._looksGarbled(gbkText)) {
+            text = gbkText;
+          }
+        }
+        resolve(text);
+      };
+      reader.onerror = function () {
+        reject(new Error('文件读取失败，请确认文件未被其他程序占用'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  },
+
+  _tryDecode(buffer, encoding) {
+    try {
+      return new TextDecoder(encoding, { fatal: false }).decode(buffer);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  _looksGarbled(text) {
+    // 统计替换字符 U+FFFD 和常见乱码模式
+    const replacementCount = (text.match(/�/g) || []).length;
+    if (replacementCount > text.length * 0.01) return true;
+    // 检测常见的 GBK 被错当 UTF-8 读的乱码模式（大量双字节组合）
+    // 如果短文本中出现大量非 ASCII 字符且不成词，可能是乱码
+    const sample = text.slice(0, 500);
+    const nonAscii = sample.replace(/[\x00-\x7F\s]/g, '');
+    // 乱码通常会产生孤立的非 ASCII 字符，而不是成组的 CJK 字符
+    return false;
+  }
+};
+
+// ========================= FormatDetector =========================
+const FormatDetector = {
+  detect(text) {
+    if (!text || !text.trim()) {
+      return { type: 'csv', delimiter: ',', hasHeader: false };
+    }
+
+    const rawLines = text.split(/\r?\n/);
+    // 取前 20 行非空行作为样本
+    const sampleLines = [];
+    for (let i = 0; i < rawLines.length && sampleLines.length < 20; i++) {
+      const trimmed = rawLines[i].trim();
+      if (trimmed) sampleLines.push(rawLines[i]);
+      // 也保留空行前的位置信息（对于 markdown 检测可能有用）
+    }
+    if (sampleLines.length === 0) {
+      return { type: 'csv', delimiter: ',', hasHeader: false };
+    }
+
+    // 同时用原始行（前 20 行）做检测
+    const workingLines = rawLines.slice(0, Math.min(rawLines.length, 50));
+
+    // --- Step 1: Markdown 检测 ---
+    if (this._isMarkdown(workingLines)) {
+      return { type: 'markdown', delimiter: '|', hasHeader: true };
+    }
+
+    // --- Step 2: CSV/TSV 检测 ---
+    const nonEmpty = sampleLines.filter(function (l) { return l.trim(); });
+    const delimResult = this._detectDelimiter(nonEmpty);
+    if (delimResult) {
+      return { type: delimResult.type, delimiter: delimResult.delimiter, hasHeader: delimResult.hasHeader };
+    }
+
+    // --- Step 3: 固定宽度检测 ---
+    const colPositions = this._detectColumnPositions(nonEmpty);
+    if (colPositions && colPositions.length >= 1) {
+      return { type: 'fixedwidth', delimiter: null, hasHeader: true, columns: colPositions };
+    }
+
+    // --- Step 4: 兜底 CSV ---
+    return { type: 'csv', delimiter: ',', hasHeader: true };
+  },
+
+  _isMarkdown(lines) {
+    let hasPipeLine = false;
+    let hasSeparator = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      if (line.indexOf('|') !== -1) {
+        hasPipeLine = true;
+        // 检查是否是分隔行：只有 | - : 空格
+        if (/^\|[\s\-:|]+\|$/.test(line) && line.indexOf('-') !== -1) {
+          hasSeparator = true;
+        }
+      }
+    }
+    return hasPipeLine && hasSeparator;
+  },
+
+  _detectDelimiter(nonEmptyLines) {
+    const candidates = [
+      { char: '\t', name: 'tsv' },
+      { char: ',',  name: 'csv' },
+      { char: ';',  name: 'csv' }
+    ];
+
+    let best = null;
+    let bestScore = Infinity;
+
+    for (let c = 0; c < candidates.length; c++) {
+      const delim = candidates[c].char;
+      // 计算每行该分隔符的数量
+      const counts = [];
+      for (let i = 0; i < nonEmptyLines.length; i++) {
+        const line = nonEmptyLines[i];
+        // 如果在引号外没有分隔符则跳过（简单检测）
+        const count = this._countDelimOutsideQuotes(line, delim);
+        counts.push(count);
+      }
+
+      // 过滤掉 count === 0 的行（可能是空行或无分隔符行）
+      const positiveCounts = counts.filter(function (v) { return v > 0; });
+      if (positiveCounts.length < Math.max(2, nonEmptyLines.length * 0.5)) continue;
+
+      // 方差
+      const v = this._variance(positiveCounts);
+      // 分数：方差越小越好，分隔符出现次数越多越可信
+      const avgCount = positiveCounts.reduce(function (a, b) { return a + b; }, 0) / positiveCounts.length;
+      // 如果大多数行 count 一致（方差接近 0），得分高
+      const score = v + (1 / (avgCount + 1)) * 0.1;
+
+      if (score < bestScore) {
+        bestScore = score;
+        best = { type: candidates[c].name, delimiter: delim };
+      }
+    }
+
+    if (!best) return null;
+
+    // 判断是否有表头：如果第一行与其他行的分隔符数量不同，可能第一行是表头
+    if (nonEmptyLines.length >= 2) {
+      const firstCount = this._countDelimOutsideQuotes(nonEmptyLines[0], best.delimiter);
+      const secondCount = this._countDelimOutsideQuotes(nonEmptyLines[1], best.delimiter);
+      // 如果大多数行的分隔符数量相同，且第一行也相同 → hasHeader = true（CSV 通常有表头）
+      best.hasHeader = true;
+      // 简单启发式：如果第一行分隔符数明显少于数据行，可能是无表头的纯数据
+      if (nonEmptyLines.length >= 3) {
+        let sameCount = 0;
+        for (let i = 1; i < Math.min(nonEmptyLines.length, 10); i++) {
+          const cnt = this._countDelimOutsideQuotes(nonEmptyLines[i], best.delimiter);
+          if (cnt === firstCount) sameCount++;
+        }
+        // 如果第一行和后续行分隔符数量一致 → 有表头
+        // 如果不一致 → 可能第一行就是数据
+      }
+    }
+
+    return best;
+  },
+
+  _countDelimOutsideQuotes(line, delim) {
+    let count = 0;
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        // 简单切换（不处理转义的引号 ""，对于计数影响不大）
+        inQuotes = !inQuotes;
+      } else if (ch === delim && !inQuotes) {
+        count++;
+      }
+    }
+    return count;
+  },
+
+  _variance(arr) {
+    if (arr.length === 0) return Infinity;
+    const mean = arr.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+    const sqDiffs = arr.map(function (v) { const d = v - mean; return d * d; });
+    return sqDiffs.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+  },
+
+  _detectColumnPositions(lines) {
+    if (lines.length < 2) return null;
+    const maxLen = Math.max.apply(null, lines.map(function (l) { return l.length; }));
+    if (maxLen < 10) return null;
+
+    // 对每行找到连续 2+ 空格的位置
+    const allGaps = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const gaps = [];
+      let inGap = false;
+      let gapStart = 0;
+      for (let j = 0; j < line.length; j++) {
+        if (line[j] === ' ') {
+          if (!inGap) { inGap = true; gapStart = j; }
+        } else {
+          if (inGap) {
+            if (j - gapStart >= 2) gaps.push({ start: gapStart, end: j });
+            inGap = false;
+          }
+        }
+      }
+      if (inGap && line.length - gapStart >= 2) {
+        gaps.push({ start: gapStart, end: line.length });
+      }
+      allGaps.push(gaps);
+    }
+
+    // 聚类 gap 位置：如果在 ±3 范围内出现在 60%+ 的行中
+    const gapClusters = [];
+    const threshold = Math.max(2, Math.floor(lines.length * 0.6));
+
+    for (let col = 2; col < maxLen - 2; col++) {
+      let matchCount = 0;
+      for (let i = 0; i < allGaps.length; i++) {
+        for (let g = 0; g < allGaps[i].length; g++) {
+          const gap = allGaps[i][g];
+          if (col >= gap.start - 1 && col <= gap.end + 1) {
+            matchCount++;
+            break;
+          }
+        }
+      }
+      if (matchCount >= threshold) {
+        // 检查不与已有 cluster 重叠
+        let tooClose = false;
+        for (let c = 0; c < gapClusters.length; c++) {
+          if (Math.abs(gapClusters[c] - col) < 5) { tooClose = true; break; }
+        }
+        if (!tooClose) gapClusters.push(col);
+      }
+    }
+
+    if (gapClusters.length === 0) return null;
+
+    // 排序并去重
+    gapClusters.sort(function (a, b) { return a - b; });
+    // 过滤掉太靠近的
+    const filtered = [gapClusters[0]];
+    for (let i = 1; i < gapClusters.length; i++) {
+      if (gapClusters[i] - filtered[filtered.length - 1] >= 5) {
+        filtered.push(gapClusters[i]);
+      }
+    }
+
+    return filtered.length > 0 ? filtered : null;
+  }
+};
+
+// ========================= TypeInferrer =========================
+const TypeInferrer = {
+  NUMBER_PATTERNS: [
+    /^-?\d+\.?\d*$/,                          // 123, -45, 3.14
+    /^-?\d+\.?\d*[eE][+-]?\d+$/,              // 1.5e10
+    /^-?\d{1,3}(,\d{3})*(\.\d+)?$/,           // 1,234,567.89
+    /^\d+%$/,                                  // 85%
+    /^-?\$\s*\d{1,3}(,\d{3})*(\.\d+)?$/,      // $1,234
+    /^￥\s*-?\d{1,3}(,\d{3})*(\.\d+)?$/,       // ￥1,234
+    /^-?\d{1,3}(,\d{3})*(\.\d+)?\s*[元]$/     // 1,234元
+  ],
+  DATE_PATTERNS: [
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/,                    // 2024-01-15, 2024/01/15
+    /^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/,                    // 01/15/2024
+    /^\d{4}年\d{1,2}月\d{1,2}日$/,                       // 2024年1月15日
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}/,    // 2024-01-15 14:30
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}$/, // 带秒
+    /^\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{2}/
+  ],
+
+  inferColumnTypes(rows, headers) {
+    const colCount = headers.length;
+    const result = [];
+    // 最多取 100 行样本
+    const sampleRows = rows.slice(0, 100);
+
+    for (let c = 0; c < colCount; c++) {
+      const colName = headers[c] || ('第' + (c + 1) + '列');
+      // 取出该列所有非空值
+      const values = [];
+      for (let r = 0; r < sampleRows.length; r++) {
+        const val = (sampleRows[r][c] || '').trim();
+        if (val) values.push(val);
+      }
+
+      if (values.length === 0) {
+        result.push({ name: colName, type: 'text', sample: '(空)' });
+        continue;
+      }
+
+      const sample = values.slice(0, 3).join(', ');
+      const total = values.length;
+
+      // 数值检测
+      let numHits = 0;
+      for (let v = 0; v < values.length; v++) {
+        if (this._isNumber(values[v])) numHits++;
+      }
+      if (numHits / total >= 0.8) {
+        result.push({ name: colName, type: 'number', sample: sample });
+        continue;
+      }
+
+      // 日期检测
+      let dateHits = 0;
+      for (let v = 0; v < values.length; v++) {
+        if (this._isDate(values[v])) dateHits++;
+      }
+      if (dateHits / total >= 0.8) {
+        result.push({ name: colName, type: 'date', sample: sample });
+        continue;
+      }
+
+      // 兜底
+      result.push({ name: colName, type: 'text', sample: sample });
+    }
+
+    return result;
+  },
+
+  _isNumber(str) {
+    // 去掉常见的数值修饰
+    let s = str.trim();
+    if (s.endsWith('%')) s = s.slice(0, -1);
+    if (s.endsWith('元')) s = s.slice(0, -1);
+    if (s.startsWith('$') || s.startsWith('￥')) s = s.slice(1);
+    s = s.trim();
+    // 去掉千分位逗号
+    if (/^-?\d{1,3}(,\d{3})*(\.\d+)?$/.test(s)) {
+      s = s.replace(/,/g, '');
+    }
+    return !isNaN(parseFloat(s)) && isFinite(Number(s)) && s !== '';
+  },
+
+  _isDate(str) {
+    const s = str.trim();
+    // 尝试用正则先匹配
+    let matched = false;
+    for (let p = 0; p < this.DATE_PATTERNS.length; p++) {
+      if (this.DATE_PATTERNS[p].test(s)) { matched = true; break; }
+    }
+    if (!matched) return false;
+    // 用 Date 进一步验证
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return false;
+    // 排除纯数字被误判为日期（如 "2024"）
+    if (/^\d+$/.test(s)) return false;
+    // 年份应在合理范围
+    const year = d.getFullYear();
+    if (year < 1900 || year > 2100) return false;
+    return true;
+  }
+};
+
+// ========================= Parsers =========================
+const Parsers = {
+  autoParse(text) {
+    const info = FormatDetector.detect(text);
+    switch (info.type) {
+      case 'csv':
+      case 'tsv':
+        return this.parseDelimited(text, info.delimiter, info.hasHeader);
+      case 'markdown':
+        return this.parseMarkdown(text);
+      case 'fixedwidth':
+        return this.parseFixedWidth(text, info.columns);
+      default:
+        return this.parseDelimited(text, ',', true);
+    }
+  },
+
+  parseDelimited(text, delimiter, hasHeader) {
+    const lines = text.split(/\r?\n/);
+    const allRows = [];
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      allRows.push(this._splitCSVLine(trimmed, delimiter));
+    }
+
+    if (allRows.length === 0) {
+      return { headers: [], rows: [] };
+    }
+
+    // 找到最大列数
+    let maxCols = 0;
+    for (let r = 0; r < allRows.length; r++) {
+      if (allRows[r].length > maxCols) maxCols = allRows[r].length;
+    }
+
+    // 补齐列
+    for (let r = 0; r < allRows.length; r++) {
+      while (allRows[r].length < maxCols) allRows[r].push('');
+    }
+
+    if (hasHeader && allRows.length >= 1) {
+      const headers = allRows[0];
+      const rows = allRows.slice(1);
+      return { headers: headers, rows: rows };
+    } else {
+      // 无表头：生成默认列名
+      const headers = [];
+      for (let c = 0; c < maxCols; c++) {
+        headers.push('列' + (c + 1));
+      }
+      return { headers: headers, rows: allRows };
+    }
+  },
+
+  _splitCSVLine(line, delimiter) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          // 检查是否是转义引号 ""
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"';
+            i++; // 跳过下一个引号
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === delimiter) {
+          fields.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current.trim());
+    return fields;
+  },
+
+  parseMarkdown(text) {
+    const lines = text.split(/\r?\n/);
+    const dataLines = [];
+    let skipNext = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      // 检测分隔行
+      if (/^\|[\s\-:|]+\|$/.test(trimmed) && trimmed.indexOf('-') !== -1) {
+        skipNext = false;
+        continue;
+      }
+      dataLines.push(trimmed);
+    }
+
+    if (dataLines.length === 0) {
+      return { headers: [], rows: [] };
+    }
+
+    const allRows = [];
+    for (let i = 0; i < dataLines.length; i++) {
+      const line = dataLines[i];
+      // 去掉首尾的 |
+      let content = line;
+      if (content.startsWith('|')) content = content.slice(1);
+      if (content.endsWith('|')) content = content.slice(0, -1);
+      const fields = content.split('|').map(function (f) { return f.trim(); });
+      allRows.push(fields);
+    }
+
+    let maxCols = 0;
+    for (let r = 0; r < allRows.length; r++) {
+      if (allRows[r].length > maxCols) maxCols = allRows[r].length;
+    }
+
+    for (let r = 0; r < allRows.length; r++) {
+      while (allRows[r].length < maxCols) allRows[r].push('');
+    }
+
+    if (allRows.length >= 1) {
+      const headers = allRows[0];
+      const rows = allRows.slice(1);
+      return { headers: headers, rows: rows };
+    }
+    return { headers: [], rows: [] };
+  },
+
+  parseFixedWidth(text, columns) {
+    const lines = text.split(/\r?\n/);
+    const nonEmpty = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim()) nonEmpty.push(lines[i]);
+    }
+
+    if (nonEmpty.length === 0) {
+      return { headers: [], rows: [] };
+    }
+
+    // 如果没有提供 columns，重新检测
+    if (!columns) {
+      columns = FormatDetector._detectColumnPositions(nonEmpty);
+      if (!columns) {
+        // Fallback: 按 2+ 空格切分
+        return this._fallbackSplit(nonEmpty);
+      }
+    }
+
+    const allRows = [];
+    for (let i = 0; i < nonEmpty.length; i++) {
+      const row = this._splitByColumns(nonEmpty[i], columns);
+      allRows.push(row);
+    }
+
+    if (allRows.length >= 1) {
+      const headers = allRows[0];
+      const rows = allRows.slice(1);
+      return { headers: headers, rows: rows };
+    }
+    return { headers: [], rows: [] };
+  },
+
+  _splitByColumns(line, columns) {
+    const fields = [];
+    let prev = 0;
+    for (let c = 0; c < columns.length; c++) {
+      fields.push(line.slice(prev, columns[c]).trim());
+      prev = columns[c];
+    }
+    fields.push(line.slice(prev).trim());
+    return fields;
+  },
+
+  _fallbackSplit(lines) {
+    // 按连续 2+ 空格切分
+    const allRows = [];
+    for (let i = 0; i < lines.length; i++) {
+      const fields = lines[i].split(/\s{2,}/).map(function (f) { return f.trim(); });
+      allRows.push(fields);
+    }
+    let maxCols = 0;
+    for (let r = 0; r < allRows.length; r++) {
+      if (allRows[r].length > maxCols) maxCols = allRows[r].length;
+    }
+    for (let r = 0; r < allRows.length; r++) {
+      while (allRows[r].length < maxCols) allRows[r].push('');
+    }
+    if (allRows.length >= 1) {
+      return { headers: allRows[0], rows: allRows.slice(1) };
+    }
+    return { headers: [], rows: [] };
+  }
+};
+
+// ========================= Converters =========================
+const Converters = {
+  toCSV(headers, rows) {
+    const all = [headers].concat(rows);
+    const lines = [];
+    for (let r = 0; r < all.length; r++) {
+      const fields = [];
+      for (let c = 0; c < all[r].length; c++) {
+        fields.push(this._escapeCSVField(all[r][c]));
+      }
+      lines.push(fields.join(','));
+    }
+    return lines.join('\n');
+  },
+
+  _escapeCSVField(field) {
+    const str = String(field == null ? '' : field);
+    // 如果包含逗号、引号、换行，需要用双引号包裹
+    if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('\r') !== -1) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  },
+
+  toMarkdown(headers, rows) {
+    const lines = [];
+    // 表头行
+    lines.push('| ' + headers.join(' | ') + ' |');
+    // 分隔行
+    const sep = headers.map(function () { return '---'; });
+    lines.push('| ' + sep.join(' | ') + ' |');
+    // 数据行
+    for (let r = 0; r < rows.length; r++) {
+      const cells = [];
+      for (let c = 0; c < rows[r].length; c++) {
+        cells.push(rows[r][c] == null ? '' : String(rows[r][c]));
+      }
+      lines.push('| ' + cells.join(' | ') + ' |');
+    }
+    return lines.join('\n');
+  },
+
+  toFixedWidth(headers, rows) {
+    const all = [headers].concat(rows);
+    const colCount = headers.length;
+
+    // 计算每列的显示宽度
+    const colWidths = [];
+    for (let c = 0; c < colCount; c++) {
+      let maxW = 0;
+      for (let r = 0; r < all.length; r++) {
+        const w = this._displayWidth(String(all[r][c] == null ? '' : all[r][c]));
+        if (w > maxW) maxW = w;
+      }
+      colWidths.push(maxW + 2); // 额外间隔 2 个空格
+    }
+
+    const lines = [];
+    for (let r = 0; r < all.length; r++) {
+      let line = '';
+      for (let c = 0; c < colCount; c++) {
+        const val = String(all[r][c] == null ? '' : all[r][c]);
+        line += this._padToWidth(val, colWidths[c]);
+      }
+      lines.push(line);
+    }
+    return lines.join('\n');
+  },
+
+  _displayWidth(str) {
+    let w = 0;
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      // CJK 统一表意文字、全角符号、中文标点
+      if ((code >= 0x4E00 && code <= 0x9FFF) ||
+          (code >= 0x3000 && code <= 0x303F) ||  // CJK 符号和标点
+          (code >= 0xFF00 && code <= 0xFFEF) ||  // 全角形式
+          (code >= 0x2E80 && code <= 0x2FDF) ||  // 中日韩部首
+          (code >= 0x3400 && code <= 0x4DBF) ||  // CJK 扩展 A
+          (code >= 0xF900 && code <= 0xFAFF) ||  // CJK 兼容汉字
+          (code >= 0xFE30 && code <= 0xFE4F) ||  // CJK 兼容形式
+          (code >= 0x20000 && code <= 0x2FFFF)) { // CJK 扩展 B+
+        w += 2;
+      } else {
+        w += 1;
+      }
+    }
+    return w;
+  },
+
+  _padToWidth(str, targetWidth) {
+    const currentW = this._displayWidth(str);
+    const padNeeded = targetWidth - currentW;
+    if (padNeeded <= 0) return str + '  ';
+    return str + ' '.repeat(padNeeded);
+  }
+};
+
+// ========================= ExcelIO =========================
+const ExcelIO = {
+  readExcel(arrayBuffer) {
+    const wb = XLSX.read(arrayBuffer, { type: 'array' });
+    if (!wb.SheetNames || wb.SheetNames.length === 0) {
+      throw new Error('工作簿中没有工作表');
+    }
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    if (!data || data.length === 0) {
+      throw new Error('工作表中没有数据');
+    }
+
+    // 第一行作为表头
+    const headers = data[0].map(function (v) {
+      return v == null || String(v).trim() === '' ? '' : String(v);
+    });
+    const rows = data.slice(1).map(function (row) {
+      return row.map(function (v) {
+        return v == null ? '' : String(v);
+      });
+    });
+
+    // 补齐列
+    const maxCols = headers.length;
+    for (let r = 0; r < rows.length; r++) {
+      while (rows[r].length < maxCols) rows[r].push('');
+    }
+
+    return { headers: headers, rows: rows };
+  },
+
+  writeExcel(headers, rows, colTypes) {
+    // 构建完整数据
+    const data = [headers].concat(rows);
+
+    // 使用 aoa_to_sheet 创建工作表
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // 设置列类型
+    if (colTypes) {
+      for (let c = 0; c < colTypes.length; c++) {
+        const type = colTypes[c].type;
+        for (let r = 0; r < rows.length; r++) {
+          const cellAddr = XLSX.utils.encode_cell({ r: r + 1, c: c });
+          const cell = ws[cellAddr];
+          if (!cell) continue;
+
+          const rawVal = String(rows[r][c] || '').trim();
+          if (type === 'number') {
+            cell.t = 'n';
+            let numVal = rawVal;
+            if (numVal.endsWith('%')) numVal = numVal.slice(0, -1);
+            if (numVal.endsWith('元')) numVal = numVal.slice(0, -1);
+            if (numVal.startsWith('$') || numVal.startsWith('￥')) numVal = numVal.slice(1);
+            numVal = numVal.replace(/,/g, '').trim();
+            cell.v = parseFloat(numVal) || 0;
+          } else if (type === 'date') {
+            cell.t = 'd';
+            cell.z = 'yyyy-mm-dd';
+            const d = new Date(rawVal);
+            if (!isNaN(d.getTime())) {
+              cell.v = d;
+            }
+          }
+          // text: 保持默认 (type 's' 或空)
+        }
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    return new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+  }
+};
+
+// ========================= App =========================
+const App = {
+  // 当前选择的输出格式
+  selectedFormat: 'csv',
+  // 缓存解析后的数据
+  tab2textData: null,
+  text2tabData: null,
+
+  init() {
+    this._initCard1();
+    this._initCard2();
+    this._initFormatButtons();
+  },
+
+  // ===== Card 1: 表格 → 纯文本 =====
+  _initCard1() {
+    const dropZone = Utils.qs('#drop-tab2text');
+    const fileInput = Utils.qs('#file-input-tab2text');
+    const clearBtn = Utils.qs('#clear-tab2text');
+    const convertBtn = Utils.qs('#convert-tab2text');
+
+    // 点击选择文件
+    Utils.on(dropZone, 'click', function () { fileInput.click(); });
+    Utils.on(fileInput, 'change', function (e) {
+      if (e.target.files && e.target.files[0]) {
+        App._handleTab2TextFile(e.target.files[0]);
+        e.target.value = '';
+      }
+    });
+
+    // 拖拽
+    Utils.on(dropZone, 'dragover', function (e) {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    Utils.on(dropZone, 'dragleave', function () {
+      dropZone.classList.remove('dragover');
+    });
+    Utils.on(dropZone, 'drop', function (e) {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        App._handleTab2TextFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // 清除
+    Utils.on(clearBtn, 'click', function () {
+      App.tab2textData = null;
+      fileInput.value = '';
+      Utils.qs('#file-info-tab2text').style.display = 'none';
+      convertBtn.disabled = true;
+      convertBtn.textContent = '选择文件后开始转换';
+    });
+
+    // 转换按钮
+    Utils.on(convertBtn, 'click', function () {
+      App._convertTab2Text();
+    });
+  },
+
+  async _handleTab2TextFile(file) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    const validExts = ['.xlsx', '.xls', '.csv'];
+
+    try {
+      if (ext === '.csv') {
+        const text = await FileIO.readAsText(file);
+        this.tab2textData = Parsers.autoParse(text);
+      } else if (ext === '.xlsx' || ext === '.xls') {
+        const buf = await FileIO.readAsArrayBuffer(file);
+        this.tab2textData = ExcelIO.readExcel(buf);
+      } else {
+        Utils.showToast('不支持的文件格式，请选择 .xlsx / .xls / .csv 文件', 'error');
+        return;
+      }
+
+      // 更新 UI
+      Utils.qs('#file-name-tab2text').textContent = file.name + ' (' +
+        this.tab2textData.rows.length + ' 行 × ' + this.tab2textData.headers.length + ' 列)';
+      Utils.qs('#file-info-tab2text').style.display = 'flex';
+      Utils.qs('#convert-tab2text').disabled = false;
+      Utils.qs('#convert-tab2text').textContent = '转换并下载';
+      Utils.showToast('文件加载成功', 'success');
+    } catch (err) {
+      Utils.showToast('文件读取失败：' + err.message, 'error');
+      console.error(err);
+    }
+  },
+
+  _convertTab2Text() {
+    if (!this.tab2textData) return;
+
+    const headers = this.tab2textData.headers;
+    const rows = this.tab2textData.rows;
+    let output, ext;
+
+    try {
+      switch (this.selectedFormat) {
+        case 'csv':
+          output = Converters.toCSV(headers, rows);
+          ext = '.csv';
+          break;
+        case 'markdown':
+          output = Converters.toMarkdown(headers, rows);
+          ext = '.md';
+          break;
+        case 'fixedwidth':
+          output = Converters.toFixedWidth(headers, rows);
+          ext = '.txt';
+          break;
+        default:
+          output = Converters.toCSV(headers, rows);
+          ext = '.csv';
+      }
+
+      const blob = new Blob(['﻿' + output], { type: 'text/plain;charset=utf-8' });
+      const filename = Utils.getBaseName(Utils.qs('#file-name-tab2text').textContent.split(' ')[0]) + ext;
+      Utils.triggerDownload(blob, filename);
+      Utils.showToast('文件已下载：' + filename, 'success');
+    } catch (err) {
+      Utils.showToast('转换失败：' + err.message, 'error');
+      console.error(err);
+    }
+  },
+
+  // ===== Card 2: 纯文本 → Excel =====
+  _initCard2() {
+    const dropZone = Utils.qs('#drop-text2tab');
+    const fileInput = Utils.qs('#file-input-text2tab');
+    const clearBtn = Utils.qs('#clear-text2tab');
+    const convertBtn = Utils.qs('#convert-text2tab');
+
+    // 点击选择文件
+    Utils.on(dropZone, 'click', function () { fileInput.click(); });
+    Utils.on(fileInput, 'change', function (e) {
+      if (e.target.files && e.target.files[0]) {
+        App._handleText2TabFile(e.target.files[0]);
+        e.target.value = '';
+      }
+    });
+
+    // 拖拽
+    Utils.on(dropZone, 'dragover', function (e) {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    Utils.on(dropZone, 'dragleave', function () {
+      dropZone.classList.remove('dragover');
+    });
+    Utils.on(dropZone, 'drop', function (e) {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        App._handleText2TabFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // 清除
+    Utils.on(clearBtn, 'click', function () {
+      App.text2tabData = null;
+      fileInput.value = '';
+      Utils.qs('#file-info-text2tab').style.display = 'none';
+      Utils.qs('#detection-box').style.display = 'none';
+      Utils.qs('#col-types-row').style.display = 'none';
+      convertBtn.disabled = true;
+      convertBtn.textContent = '选择文件后开始转换';
+    });
+
+    // 转换按钮
+    Utils.on(convertBtn, 'click', function () {
+      App._convertText2Tab();
+    });
+  },
+
+  async _handleText2TabFile(file) {
+    try {
+      const text = await FileIO.readAsText(file);
+      if (!text || !text.trim()) {
+        Utils.showToast('文件内容为空', 'warning');
+        return;
+      }
+
+      // 自动解析
+      const info = FormatDetector.detect(text);
+      const parsed = Parsers.autoParse(text);
+
+      if (parsed.rows.length === 0 && parsed.headers.length === 0) {
+        Utils.showToast('未能从文件中解析出表格数据', 'error');
+        return;
+      }
+
+      // 类型推断
+      const colTypes = TypeInferrer.inferColumnTypes(parsed.rows, parsed.headers);
+
+      // 缓存数据
+      this.text2tabData = {
+        headers: parsed.headers,
+        rows: parsed.rows,
+        colTypes: colTypes,
+        formatInfo: info
+      };
+
+      // 显示文件信息
+      Utils.qs('#file-name-text2tab').textContent = file.name + ' (' +
+        parsed.rows.length + ' 行 × ' + parsed.headers.length + ' 列)';
+      Utils.qs('#file-info-text2tab').style.display = 'flex';
+
+      // 显示检测结果
+      const formatNames = { csv: 'CSV（逗号分隔）', tsv: 'TSV（Tab 分隔）', markdown: 'Markdown 表格', fixedwidth: '固定宽度文本' };
+      Utils.qs('#detected-format').textContent = formatNames[info.type] || info.type;
+      Utils.qs('#detection-box').style.display = 'block';
+
+      // 显示列类型
+      if (colTypes.length > 0) {
+        let html = '';
+        for (let i = 0; i < colTypes.length; i++) {
+          const typeNames = { number: '数值', date: '日期', text: '文本' };
+          html += '<span class="type-badge ' + colTypes[i].type + '">' +
+            colTypes[i].name + ': ' + (typeNames[colTypes[i].type] || colTypes[i].type) + '</span> ';
+        }
+        Utils.qs('#col-types-display').innerHTML = html;
+        Utils.qs('#col-types-row').style.display = 'flex';
+      }
+
+      Utils.qs('#convert-text2tab').disabled = false;
+      Utils.qs('#convert-text2tab').textContent = '转换并下载 Excel';
+      Utils.showToast('文件加载成功，已自动识别格式和数据类型', 'success');
+    } catch (err) {
+      Utils.showToast('文件处理失败：' + err.message, 'error');
+      console.error(err);
+    }
+  },
+
+  _convertText2Tab() {
+    if (!this.text2tabData) return;
+
+    try {
+      const blob = ExcelIO.writeExcel(
+        this.text2tabData.headers,
+        this.text2tabData.rows,
+        this.text2tabData.colTypes
+      );
+      const filename = Utils.getBaseName(
+        Utils.qs('#file-name-text2tab').textContent.split(' ')[0]
+      ) + '.xlsx';
+      Utils.triggerDownload(blob, filename);
+      Utils.showToast('文件已下载：' + filename, 'success');
+    } catch (err) {
+      Utils.showToast('转换失败：' + err.message, 'error');
+      console.error(err);
+    }
+  },
+
+  // ===== 格式选择按钮 =====
+  _initFormatButtons() {
+    const self = this;
+    const buttons = Utils.qsa('.format-btn');
+    buttons.forEach(function (btn) {
+      Utils.on(btn, 'click', function () {
+        buttons.forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        self.selectedFormat = btn.getAttribute('data-format');
+      });
+    });
+  }
+};
+
+// 启动
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof XLSX === 'undefined') {
+    Utils.showToast('Excel 处理库加载失败，请检查网络连接后刷新页面', 'error');
+    return;
+  }
+  App.init();
+});
+
+})();
+</script>
+</body>
+</html>
